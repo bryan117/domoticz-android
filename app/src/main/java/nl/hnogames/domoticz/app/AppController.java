@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Domoticz
+ * Copyright (C) 2015 Domoticz - Mark Heinis
  *
  *  Licensed to the Apache Software Foundation (ASF) under one
  *  or more contributor license agreements.  See the NOTICE file
@@ -9,15 +9,14 @@
  *  "License"); you may not use this file except in compliance
  *  with the License.  You may obtain a copy of the License at
  *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing,
+ *  Unless required by applicable law or agreed to in writing,
  *  software distributed under the License is distributed on an
  *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  *  KIND, either express or implied.  See the License for the
  *  specific language governing permissions and limitations
  *  under the License.
- *
  */
 
 package nl.hnogames.domoticz.app;
@@ -26,7 +25,7 @@ import android.app.Application;
 import android.content.Context;
 import android.os.Bundle;
 import android.support.multidex.MultiDex;
-import android.text.TextUtils;
+import android.support.multidex.MultiDexApplication;
 import android.util.Log;
 
 import com.android.volley.DefaultRetryPolicy;
@@ -36,8 +35,9 @@ import com.android.volley.RetryPolicy;
 import com.android.volley.toolbox.Volley;
 import com.google.android.gms.analytics.GoogleAnalytics;
 import com.google.android.gms.analytics.Tracker;
-import com.splunk.mint.Mint;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 
@@ -49,11 +49,17 @@ import de.duenndns.ssl.MemorizingTrustManager;
 import eu.inloop.easygcm.EasyGcm;
 import eu.inloop.easygcm.GcmListener;
 import nl.hnogames.domoticz.R;
+import nl.hnogames.domoticz.Utils.DeviceUtils;
 import nl.hnogames.domoticz.Utils.NotificationUtil;
-import nl.hnogames.domoticz.Utils.SharedPrefUtil;
+import nl.hnogames.domoticz.Utils.PermissionsUtil;
+import nl.hnogames.domoticz.Utils.UsefulBits;
+import nl.hnogames.domoticzapi.Domoticz;
+import nl.hnogames.domoticzapi.Interfaces.MobileDeviceReceiver;
+import shortbread.Shortbread;
 
+import static android.text.TextUtils.isDigitsOnly;
 
-public class AppController extends Application implements GcmListener {
+public class AppController extends MultiDexApplication implements GcmListener {
 
     public static final String TAG = AppController.class.getSimpleName();
     private static AppController mInstance;
@@ -68,19 +74,20 @@ public class AppController extends Application implements GcmListener {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        //for debugging & receiving crash reports
-        Mint.initAndStartSession(this, "a61b1e35");
-        EasyGcm.init(this);
-
+        Shortbread.create(this);
+        if (PermissionsUtil.canAccessDeviceState(this))
+            StartEasyGCM();
         mInstance = this;
     }
 
+    public void StartEasyGCM() {
+        EasyGcm.init(this);
+    }
+
+    @SuppressWarnings("TryWithIdenticalCatches")
     public RequestQueue getRequestQueue() {
         if (mRequestQueue == null) {
-            // register MemorizingTrustManager for HTTPS
             Context context = getApplicationContext();
-
             try {
                 Log.d(TAG, "Initializing SSL");
                 SSLContext sc = SSLContext.getInstance("TLS");
@@ -100,10 +107,17 @@ public class AppController extends Application implements GcmListener {
         return mRequestQueue;
     }
 
+    /*
     public <T> void addToRequestQueue(Request<T> req, String tag) {
         req.setTag(TextUtils.isEmpty(tag) ? TAG : tag);
         getRequestQueue().add(req);
     }
+    public void cancelPendingRequests(Object tag) {
+        if (mRequestQueue != null) {
+            mRequestQueue.cancelAll(tag);
+        }
+    }
+    */
 
     public <T> void addToRequestQueue(Request<T> req) {
         req.setTag(TAG);
@@ -114,12 +128,6 @@ public class AppController extends Application implements GcmListener {
 
         req.setRetryPolicy(retryPolicy);
         getRequestQueue().add(req);
-    }
-
-    public void cancelPendingRequests(Object tag) {
-        if (mRequestQueue != null) {
-            mRequestQueue.cancelAll(tag);
-        }
     }
 
     @Override
@@ -144,13 +152,89 @@ public class AppController extends Application implements GcmListener {
     @Override
     public void onMessage(String s, Bundle bundle) {
         if (bundle.containsKey("message")) {
-            String message = bundle.getString("message");
-            NotificationUtil.sendSimpleNotification(this.getString(R.string.app_name), message, this);
+            String message = decode(bundle.getString("message"));
+            String subject = decode(bundle.getString("subject"));
+            String body = decode(bundle.getString("body"));
+
+            int prio = 0; //default
+            String priority = decode(bundle.getString("priority"));
+            if (!UsefulBits.isEmpty(priority) && isDigitsOnly(priority))
+                prio = Integer.valueOf(priority);
+
+            if (subject != null && !body.equals(subject)) {
+                //String extradata = decode(bundle.getString("extradata"));
+                String deviceid = decode(bundle.getString("deviceid"));
+                if (!UsefulBits.isEmpty(deviceid) && isDigitsOnly(deviceid) && Integer.valueOf(deviceid) > 0)
+                    NotificationUtil.sendSimpleNotification(subject, body, prio, this);
+                else
+                    NotificationUtil.sendSimpleNotification(Integer.valueOf(deviceid), subject, body, prio, this);
+            } else {
+                NotificationUtil.sendSimpleNotification(this.getString(R.string.app_name_domoticz), message, prio, this);
+            }
         }
     }
 
-    @Override
-    public void sendRegistrationIdToBackend(String s) {
-        new SharedPrefUtil(this).setNotificationRegistrationID(s);
+    public void resendRegistrationIdToBackend() {
+        final String UUID = DeviceUtils.getUniqueID(this);
+        String sender_id = getGCMRegistrationId();
+        if (UsefulBits.isEmpty(sender_id) || UsefulBits.isEmpty(UUID))
+            return;
+
+        registerMobileForGCM(UUID, sender_id);
     }
+
+    public String getGCMRegistrationId() {
+        return EasyGcm.getRegistrationId(this);
+    }
+
+    @Override
+    public void sendRegistrationIdToBackend(final String sender_id) {
+        final String UUID = DeviceUtils.getUniqueID(this);
+        if (UsefulBits.isEmpty(sender_id) || UsefulBits.isEmpty(UUID))
+            return;
+
+        final Domoticz mDomoticz = new Domoticz(this, AppController.getInstance().getRequestQueue());
+        mDomoticz.CleanMobileDevice(UUID, new MobileDeviceReceiver() {
+            @Override
+            public void onSuccess() {
+                // Previous id cleaned
+                registerMobileForGCM(UUID, sender_id);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                // Nothing to clean
+                registerMobileForGCM(UUID, sender_id);
+            }
+        });
+    }
+
+    private void registerMobileForGCM(String UUID, String senderid) {
+
+        final Domoticz mDomoticz = new Domoticz(this, AppController.getInstance().getRequestQueue());
+        mDomoticz.AddMobileDevice(UUID, senderid, new MobileDeviceReceiver() {
+            @Override
+            public void onSuccess() {
+                Log.i("GCM", "Device registered on Domoticz");
+            }
+
+            @Override
+            public void onError(Exception error) {
+                if (error != null)
+                    Log.i("GCM", "Device not registered on Domoticz, " + error.getMessage());
+            }
+        });
+    }
+
+    private String decode(String str) {
+        if (str != null) {
+            try {
+                return URLDecoder.decode(str, "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }
+        return str;
+    }
+
 }

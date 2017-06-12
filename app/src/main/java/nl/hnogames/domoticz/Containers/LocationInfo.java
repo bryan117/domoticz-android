@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Domoticz
+ * Copyright (C) 2015 Domoticz - Mark Heinis
  *
  *  Licensed to the Apache Software Foundation (ASF) under one
  *  or more contributor license agreements.  See the NOTICE file
@@ -9,15 +9,14 @@
  *  "License"); you may not use this file except in compliance
  *  with the License.  You may obtain a copy of the License at
  *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing,
+ *  Unless required by applicable law or agreed to in writing,
  *  software distributed under the License is distributed on an
  *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  *  KIND, either express or implied.  See the License for the
  *  specific language governing permissions and limitations
  *  under the License.
- *
  */
 
 package nl.hnogames.domoticz.Containers;
@@ -26,6 +25,8 @@ import android.location.Address;
 
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.maps.model.LatLng;
+
+import nl.hnogames.domoticz.Utils.UsefulBits;
 
 public class LocationInfo {
     private String name;
@@ -36,6 +37,10 @@ public class LocationInfo {
     private int radius = 400;           //meters
     private boolean enabled = false;
     private Address address;
+    private String switchName;
+    private String value;
+
+    private boolean isSceneOrGroup = false;
 
     public LocationInfo(int id, String name, LatLng latLng, int radius) {
         this.name = name;
@@ -44,8 +49,19 @@ public class LocationInfo {
         this.radius = radius;
     }
 
+    public boolean isSceneOrGroup() {
+        return isSceneOrGroup;
+    }
+
+    public void setSceneOrGroup(boolean sceneOrGroup) {
+        isSceneOrGroup = sceneOrGroup;
+    }
+
     public String getName() {
-        return name;
+        if (UsefulBits.isEmpty(name))
+            return "";
+        else
+            return name;
     }
 
     public void setName(String name) {
@@ -64,11 +80,11 @@ public class LocationInfo {
         return id;
     }
 
-    public int getSwitchidx() {
+    public int getSwitchIdx() {
         return switchIdx;
     }
 
-    public void setSwitchidx(int idx) {
+    public void setSwitchIdx(int idx) {
         switchIdx = idx;
     }
 
@@ -112,15 +128,16 @@ public class LocationInfo {
     public Geofence toGeofence() {
         if (radius <= 0)
             radius = 400;//default
-
         try {
             // Build a new Geofence object.
             return new Geofence.Builder()
                     .setRequestId(String.valueOf(id))
                     .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
+                            //Geofence.GEOFENCE_TRANSITION_DWELL |
                             Geofence.GEOFENCE_TRANSITION_EXIT)
                     .setCircularRegion(latLng.latitude, latLng.longitude, radius)
                     .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setLoiteringDelay(30000)
                     .build();
         } catch (Exception ex) {
             // Wrong LocationInfo data detected
@@ -128,4 +145,19 @@ public class LocationInfo {
         }
     }
 
+    public String getValue() {
+        return value;
+    }
+
+    public void setValue(String value) {
+        this.value = value;
+    }
+
+    public String getSwitchName() {
+        return switchName;
+    }
+
+    public void setSwitchName(String switchName) {
+        this.switchName = switchName;
+    }
 }
