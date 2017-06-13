@@ -13,11 +13,14 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 
 import hugo.weaving.DebugLog;
 import nl.hnogames.domoticz.Containers.LocationInfo;
 import nl.hnogames.domoticz.R;
+import nl.hnogames.domoticz.Utils.GeoUtils;
 import nl.hnogames.domoticz.Utils.NotificationUtil;
 import nl.hnogames.domoticz.Utils.SharedPrefUtil;
 import nl.hnogames.domoticz.Utils.UsefulBits;
@@ -67,7 +70,11 @@ public class GeofenceReceiver extends BroadcastReceiver
                         Log.d(TAG, "Triggered entering a geofence location: "
                                 + locationFound.getName());
 
-                        if (mSharedPrefs.isGeofenceNotificationsEnabled()) {
+                        Long registerCompare = System.currentTimeMillis()/1000;
+                        Log.d(TAG, String.valueOf(GeoUtils.registerTime));
+                        Log.d(TAG, String.valueOf(registerCompare));
+                        if (mSharedPrefs.isGeofenceNotificationsEnabled() && ((registerCompare - GeoUtils.registerTime) >= 3) ) {
+//                        if (mSharedPrefs.isGeofenceNotificationsEnabled()) {
                             notificationTitle = String.format(
                                     context.getString(R.string.geofence_location_entering),
                                     locationFound.getName());
