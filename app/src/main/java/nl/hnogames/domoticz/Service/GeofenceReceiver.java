@@ -13,9 +13,7 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 
 import hugo.weaving.DebugLog;
 import nl.hnogames.domoticz.Containers.LocationInfo;
@@ -71,10 +69,7 @@ public class GeofenceReceiver extends BroadcastReceiver
                                 + locationFound.getName());
 
                         Long registerCompare = System.currentTimeMillis()/1000;
-                        Log.d(TAG, String.valueOf(GeoUtils.registerTime));
-                        Log.d(TAG, String.valueOf(registerCompare));
                         if (mSharedPrefs.isGeofenceNotificationsEnabled() && ((registerCompare - GeoUtils.registerTime) >= 3) ) {
-//                        if (mSharedPrefs.isGeofenceNotificationsEnabled()) {
                             notificationTitle = String.format(
                                     context.getString(R.string.geofence_location_entering),
                                     locationFound.getName());
