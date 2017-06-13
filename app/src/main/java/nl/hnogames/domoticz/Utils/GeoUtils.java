@@ -42,6 +42,7 @@ import nl.hnogames.domoticz.Service.GeolocationService;
 
 public class GeoUtils {
     public static boolean geofencesAlreadyRegistered = false;
+    public static long registerTime;
     private Context mContext;
     private SharedPrefUtil mSharedPrefs;
     private GoogleApiClient mApiClient = null;
